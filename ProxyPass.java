@@ -12,8 +12,9 @@ import javax.servlet.http.HttpServletResponse;
 
 @WebServlet("/*")
 public class ProxyPass extends HttpServlet {
-    private final String proxy_addr = "172.7.32.35";
-    private final Integer proxy_port = 80;
+    private final String proxy_addr = "127.0.0.1";
+    //private final String proxy_addr = "172.7.32.35";
+    private final Integer proxy_port = 8000;
 
     public ProxyPass() {
         super();
@@ -21,19 +22,20 @@ public class ProxyPass extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ProxyClass proxy = ProxyUtils.proxyRequest(request, proxy_addr, proxy_port, request.getRequestURI());
+        request.setCharacterEncoding("utf-8");
         response.setContentType("text/html;charset=utf-8");
 
         Set<Entry<String, String>> entrys = proxy.getHeader().entrySet();
         entrys.forEach(entry -> {
             response.setHeader(entry.getKey(), entry.getValue());
         });
-        response.setHeader("Server", "Servlet/MeiK");
+        response.setHeader("Server", "Servlet");
         response.setStatus(Integer.parseInt(proxy.getStatus()));
 
         if (proxy.getStatus().equals("304")) {
             return;
         }
-        else if (proxy.getHeader().get("Content-Type").equalsIgnoreCase("text/html")) {
+        else if (ProxyUtils.isDoc(proxy.getHeader().get("Content-Type"))) {
             response.getWriter().write(proxy.getBody());
         } else {
             response.getOutputStream().write(proxy.getByteBody());
