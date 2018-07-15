@@ -12,8 +12,8 @@ import java.util.HashMap;
 import javax.servlet.http.HttpServletRequest;
 
 public class ProxyUtils {
-    static private final String GET_CONTENT_FORMAT = "GET http://%s%s HTTP/1.1\r\nHost: %s\r\n%s\r\n";
-    static private final String POST_CONTENT_FORMAT = "POST http://%s%s HTTP/1.1\r\nHost: %s\r\n%s\r\n%s";
+    static private final String GET_CONTENT_FORMAT = "GET %s HTTP/1.1\r\nHost: %s\r\n%s\r\n";
+    static private final String POST_CONTENT_FORMAT = "POST %s HTTP/1.1\r\nHost: %s\r\n%s\r\n%s";
 
     /**
      * 拼接 HTTP 请求的正文
@@ -24,12 +24,15 @@ public class ProxyUtils {
      * @param header
      * @return
      */
-    static private String makeRequestContent(String method, String addr, String uri, String query, String header,
-            String body) {
+    static private String makeRequestContent(String method, String addr, Integer port, String uri, String query,
+            String header, String body) {
+        if (port != 80) {
+            addr = addr + ":" + port.toString();
+        }
         if (method.equalsIgnoreCase("GET")) {
-            return String.format(GET_CONTENT_FORMAT, addr, uri + query, addr, header);
+            return String.format(GET_CONTENT_FORMAT, uri + query, addr, header);
         } else {
-            return String.format(POST_CONTENT_FORMAT, addr, uri + query, addr, header, body);
+            return String.format(POST_CONTENT_FORMAT, uri + query, addr, header, body);
         }
     }
 
@@ -58,6 +61,12 @@ public class ProxyUtils {
         return str;
     }
 
+    static public Boolean isDoc(String type) {
+        return (type.equalsIgnoreCase("text/html")
+                || type.equalsIgnoreCase("application/javascript")
+                || type.equalsIgnoreCase("text/css"));
+    }
+    
     static public ProxyClass readResponse(Socket socket) {
         ProxyClass proxy = new ProxyClass();
 
@@ -94,7 +103,7 @@ public class ProxyUtils {
             String body = "";
             byte[] buffer = null;
             // 文档类型
-            if (proxy.getHeader().get("Content-Type").equalsIgnoreCase("text/html")) {
+            if (isDoc(proxy.getHeader().get("Content-Type"))) {
                 while ((ch = in.read()) != -1) {
                     if (body.length() < contentLength) {
                         body += (char) ch;
@@ -143,6 +152,9 @@ public class ProxyUtils {
         String headerContent = "";
 
         for (String key : map.keySet()) {
+            if (key.equalsIgnoreCase("host")) {
+                continue;
+            }
             headerContent += key + ": " + map.get(key) + "\r\n";
         }
 
@@ -191,7 +203,12 @@ public class ProxyUtils {
             e.printStackTrace();
         }
 
-        return postContent;
+        try {
+            return new String(postContent.getBytes("ISO-8859-1"), "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return "";
+        }
     }
 
     static public ProxyClass proxyRequest(HttpServletRequest request, String proxy_addr, Integer proxy_port,
@@ -201,10 +218,9 @@ public class ProxyUtils {
             socket = new Socket(proxy_addr, proxy_port);
             // 解析 HTTP 请求并转发
             OutputStream out = socket.getOutputStream();
-            String requestContent = ProxyUtils.makeRequestContent(request.getMethod(), proxy_addr, uri,
+            String requestContent = ProxyUtils.makeRequestContent(request.getMethod(), proxy_addr, proxy_port, uri,
                     makeGetContent(request), makeHeaderContent(request), makePostContent(request));
             out.write(requestContent.getBytes());
-            System.out.print(requestContent);
 
         } catch (UnknownHostException e) {
             e.printStackTrace();
